@@ -17,16 +17,18 @@ const pool = new Pool({
  * @return {Promise<{}>} A promise to the user.
  */
 const getUserWithEmail = function(email) {
-  let user;
-  for (const userId in users) {
-    user = users[userId];
-    if (user.email.toLowerCase() === email.toLowerCase()) {
-      break;
+  return pool.query(`
+  SELECT *
+  FROM users
+  WHERE email = $1
+  `, [email])
+  .then(res => {
+    if (res.rows.length == 0) { 
+      return null;
     } else {
-      user = null;
+      return res.rows[0];
     }
-  }
-  return Promise.resolve(user);
+  })
 }
 exports.getUserWithEmail = getUserWithEmail;
 
@@ -63,6 +65,18 @@ exports.addUser = addUser;
  */
 const getAllReservations = function(guest_id, limit = 10) {
   return getAllProperties(null, 2);
+// SELECT DISTINCT
+// reservations.*,
+// properties.*,
+// avg(rating)
+// FROM reservations
+// JOIN users ON users.id = guest_id
+// JOIN properties ON properties.id = property_id
+// JOIN property_reviews ON properties.id = property_reviews.property_id
+// WHERE users.id = 1 AND end_date < now()::date
+// GROUP BY reservations.id, properties.id
+// ORDER BY start_date DESC
+// LIMIT 10;
 }
 exports.getAllReservations = getAllReservations;
 
