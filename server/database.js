@@ -109,14 +109,77 @@ exports.getAllReservations = getAllReservations;
  * @return {Promise<[{}]>}  A promise to the properties.
  */
 const getAllProperties = function(options, limit = 10) {
-  return pool.query(`
-  SELECT *
+  const queryParams = [];
+
+  let queryString = `
+  SELECT
+  properties.id,
+  owner_id,
+  title,
+  description,
+  thumbnail_photo_url,
+  cover_photo_url,
+  cost_per_night,
+  parking_spaces,
+  number_of_bathrooms,
+  number_of_bedrooms,
+  country,
+  street,
+  city,
+  province,
+  post_code,
+  active,
+  avg(property_reviews.rating) AS average_rating
   FROM properties
-  LIMIT $1
-  `, [limit])
+  JOIN property_reviews ON property_id = properties.id
+  `;
+  
+  if (options.minimum_price_per_night) {
+    queryParams.push(options.minimum_price_per_night * 100) // turn dollars into cents (prices stored in db in cents)
+  } else {
+    queryParams.push(0);
+  }
+  queryString += `WHERE cost_per_night >= $${queryParams.length} `
+  
+  if (options.maximum_price_per_night) {
+    if (queryParams.length > 0) {
+      queryString += 'AND ';
+    }
+    queryParams.push(options.maximum_price_per_night * 100); // turn dollars into cents (prices stored in db in cents)
+    queryString += `cost_per_night <= $${queryParams.length} `;
+  }
+  
+  if (options.owner_id) {
+    if (queryParams.length > 0) {
+      queryString += 'AND ';
+    }
+    queryParams.push(options.owner_id)
+    queryString += `owner_id = $${queryParams.length}`
+  }
+    
+  if (options.city) {
+    if (queryParams.length > 0) {
+      queryString += 'AND ';
+    }
+    queryParams.push(`%${options.city}%`);
+    queryString += `city ILIKE $${queryParams.length} `;
+  }
+
+  queryString += 'GROUP BY properties.id ';
+
+  if (options.minimum_rating) {
+    queryParams.push(options.minimum_rating);
+    queryString += `HAVING avg(rating) >= $${queryParams.length} `;
+  }
+  queryParams.push(limit);
+  queryString += `
+  ORDER BY cost_per_night
+  LIMIT $${queryParams.length};
+  `
+  return pool.query(queryString, queryParams)
   .then(res => {
     return res.rows;
-  })
+  }).catch(err => console.error('getAllProperties Query Error:', err.stack));
 }
 exports.getAllProperties = getAllProperties;
 
